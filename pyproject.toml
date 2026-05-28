@@ -1,0 +1,56 @@
+[project]
+name = "book-formatter"
+version = "0.1.0"
+description = "Format manuscript .docx files into a styled template"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [{name = ""}]
+keywords = []
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "click>=8.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "mypy",
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[project.scripts]
+book-formatter = "book_formatter.main:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/book_formatter"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
