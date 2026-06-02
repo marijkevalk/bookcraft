@@ -5,7 +5,7 @@ description = "Format manuscript .docx files into a styled template"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
-authors = [{name = ""}]
+authors = [{name = "Marijke"}]
 keywords = []
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -14,6 +14,8 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.0",
+    "python-docx>=1.1",
+    "docxtpl>=0.16",
 ]
 
 [dependency-groups]
@@ -54,3 +56,7 @@ skip_covered = false
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[[tool.mypy.overrides]]
+module = "docxtpl.*"
+ignore_missing_imports = true

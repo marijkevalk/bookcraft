@@ -1,0 +1,325 @@
+==============================================================================
+BOOK-FORMATTER VERIFICATION REPORT
+==============================================================================
+source: /root/opus/tmp/Claude_book_formatting_test/book_author_B.docx
+output: /root/opus/tmp/Claude_book_formatting_test/output_author_B.docx
+
+Body paragraphs are detected in the source via the AI chapter
+detector (chapter title lines and POV-marker lines are excluded).
+The output's body paragraphs are those styled CSP - Chapter Body
+Text or its First Paragraph variant.
+
+Per-paragraph columns (one row per body paragraph):
+  para        - body paragraph index within the chapter (0 = first)
+  src_chars   - number of characters in the source paragraph
+  out_chars   - number of characters in the rendered output paragraph
+  text        - OK if text content matches verbatim, DIFF otherwise
+  italic      - OK if italic-run positions match, DIFF otherwise
+
+==============================================================================
+OVERALL SUMMARY
+==============================================================================
+Chapters detected: 4 source, 4 output
+Body paragraphs:  258 source, 258 output
+Total characters: 41,603 source, 41,603 output
+Text mismatches:   0 / 258
+Italic mismatches: 0 / 258
+Verdict: ✓ ALL CLEAR
+
+==============================================================================
+CHAPTER ONE — Fiona
+==============================================================================
+Paragraphs:  62 source, 62 output
+Characters:  9,716 source, 9,716 output
+Mismatches:  text 0 / 62,  italic 0 / 62
+
+ para   src_chars   out_chars    text   italic
+------------------------------------------------------------------------------
+    0          12          12      OK       OK
+    1         195         195      OK       OK
+    2         412         412      OK       OK
+    3         107         107      OK       OK
+    4         284         284      OK       OK
+    5          88          88      OK       OK
+    6         171         171      OK       OK
+    7         178         178      OK       OK
+    8          55          55      OK       OK
+    9         202         202      OK       OK
+   10         260         260      OK       OK
+   11         315         315      OK       OK
+   12         528         528      OK       OK
+   13         263         263      OK       OK
+   14         133         133      OK       OK
+   15          17          17      OK       OK
+   16         268         268      OK       OK
+   17          43          43      OK       OK
+   18          57          57      OK       OK
+   19          87          87      OK       OK
+   20         166         166      OK       OK
+   21         425         425      OK       OK
+   22         352         352      OK       OK
+   23         298         298      OK       OK
+   24         118         118      OK       OK
+   25          64          64      OK       OK
+   26          49          49      OK       OK
+   27         104         104      OK       OK
+   28         403         403      OK       OK
+   29          32          32      OK       OK
+   30         333         333      OK       OK
+   31          83          83      OK       OK
+   32          73          73      OK       OK
+   33         287         287      OK       OK
+   34          32          32      OK       OK
+   35         236         236      OK       OK
+   36         142         142      OK       OK
+   37          45          45      OK       OK
+   38         124         124      OK       OK
+   39         104         104      OK       OK
+   40         108         108      OK       OK
+   41          96          96      OK       OK
+   42         159         159      OK       OK
+   43          83          83      OK       OK
+   44          66          66      OK       OK
+   45         119         119      OK       OK
+   46         100         100      OK       OK
+   47          73          73      OK       OK
+   48          77          77      OK       OK
+   49         285         285      OK       OK
+   50          88          88      OK       OK
+   51         229         229      OK       OK
+   52          58          58      OK       OK
+   53          98          98      OK       OK
+   54          93          93      OK       OK
+   55         107         107      OK       OK
+   56          26          26      OK       OK
+   57          80          80      OK       OK
+   58          34          34      OK       OK
+   59         168         168      OK       OK
+   60         160         160      OK       OK
+   61         264         264      OK       OK
+
+==============================================================================
+CHAPTER TWO — Dimitri
+==============================================================================
+Paragraphs:  70 source, 70 output
+Characters:  11,992 source, 11,992 output
+Mismatches:  text 0 / 70,  italic 0 / 70
+
+ para   src_chars   out_chars    text   italic
+------------------------------------------------------------------------------
+    0         355         355      OK       OK
+    1          39          39      OK       OK
+    2         414         414      OK       OK
+    3          88          88      OK       OK
+    4          97          97      OK       OK
+    5         246         246      OK       OK
+    6         105         105      OK       OK
+    7         324         324      OK       OK
+    8          65          65      OK       OK
+    9         450         450      OK       OK
+   10         455         455      OK       OK
+   11          18          18      OK       OK
+   12         291         291      OK       OK
+   13          98          98      OK       OK
+   14         242         242      OK       OK
+   15          33          33      OK       OK
+   16         115         115      OK       OK
+   17         403         403      OK       OK
+   18         332         332      OK       OK
+   19          82          82      OK       OK
+   20          65          65      OK       OK
+   21          71          71      OK       OK
+   22         137         137      OK       OK
+   23          92          92      OK       OK
+   24         328         328      OK       OK
+   25         111         111      OK       OK
+   26         137         137      OK       OK
+   27         355         355      OK       OK
+   28          65          65      OK       OK
+   29         202         202      OK       OK
+   30          64          64      OK       OK
+   31          41          41      OK       OK
+   32          72          72      OK       OK
+   33         282         282      OK       OK
+   34         298         298      OK       OK
+   35         130         130      OK       OK
+   36          49          49      OK       OK
+   37         325         325      OK       OK
+   38         305         305      OK       OK
+   39          54          54      OK       OK
+   40          90          90      OK       OK
+   41         146         146      OK       OK
+   42         241         241      OK       OK
+   43         111         111      OK       OK
+   44         325         325      OK       OK
+   45          57          57      OK       OK
+   46         107         107      OK       OK
+   47         374         374      OK       OK
+   48         104         104      OK       OK
+   49          84          84      OK       OK
+   50          95          95      OK       OK
+   51         131         131      OK       OK
+   52         185         185      OK       OK
+   53          93          93      OK       OK
+   54         203         203      OK       OK
+   55          47          47      OK       OK
+   56         146         146      OK       OK
+   57         181         181      OK       OK
+   58         156         156      OK       OK
+   59         255         255      OK       OK
+   60          70          70      OK       OK
+   61         220         220      OK       OK
+   62         100         100      OK       OK
+   63         185         185      OK       OK
+   64          50          50      OK       OK
+   65         212         212      OK       OK
+   66         238         238      OK       OK
+   67         133         133      OK       OK
+   68          81          81      OK       OK
+   69         137         137      OK       OK
+
+==============================================================================
+CHAPTER THREE — Fiona
+==============================================================================
+Paragraphs:  67 source, 67 output
+Characters:  10,728 source, 10,728 output
+Mismatches:  text 0 / 67,  italic 0 / 67
+
+ para   src_chars   out_chars    text   italic
+------------------------------------------------------------------------------
+    0         298         298      OK       OK
+    1         169         169      OK       OK
+    2         296         296      OK       OK
+    3          58          58      OK       OK
+    4         387         387      OK       OK
+    5         415         415      OK       OK
+    6         146         146      OK       OK
+    7          47          47      OK       OK
+    8          90          90      OK       OK
+    9         107         107      OK       OK
+   10         277         277      OK       OK
+   11         444         444      OK       OK
+   12         111         111      OK       OK
+   13          41          41      OK       OK
+   14         265         265      OK       OK
+   15          94          94      OK       OK
+   16         220         220      OK       OK
+   17         144         144      OK       OK
+   18         126         126      OK       OK
+   19         190         190      OK       OK
+   20         217         217      OK       OK
+   21          13          13      OK       OK
+   22         288         288      OK       OK
+   23         174         174      OK       OK
+   24          37          37      OK       OK
+   25          94          94      OK       OK
+   26          58          58      OK       OK
+   27          88          88      OK       OK
+   28         194         194      OK       OK
+   29         227         227      OK       OK
+   30          58          58      OK       OK
+   31          19          19      OK       OK
+   32         115         115      OK       OK
+   33          86          86      OK       OK
+   34          34          34      OK       OK
+   35          81          81      OK       OK
+   36         238         238      OK       OK
+   37         138         138      OK       OK
+   38          82          82      OK       OK
+   39         129         129      OK       OK
+   40         220         220      OK       OK
+   41         103         103      OK       OK
+   42         102         102      OK       OK
+   43         222         222      OK       OK
+   44         161         161      OK       OK
+   45          81          81      OK       OK
+   46         229         229      OK       OK
+   47          83          83      OK       OK
+   48         281         281      OK       OK
+   49          59          59      OK       OK
+   50         156         156      OK       OK
+   51          66          66      OK       OK
+   52         131         131      OK       OK
+   53         379         379      OK       OK
+   54          82          82      OK       OK
+   55          73          73      OK       OK
+   56         143         143      OK       OK
+   57         381         381      OK       OK
+   58         125         125      OK       OK
+   59         181         181      OK       OK
+   60         444         444      OK       OK
+   61          66          66      OK       OK
+   62          57          57      OK       OK
+   63          54          54      OK       OK
+   64         250         250      OK       OK
+   65         251         251      OK       OK
+   66          53          53      OK       OK
+
+==============================================================================
+CHAPTER FOUR — Fiona
+==============================================================================
+Paragraphs:  59 source, 59 output
+Characters:  9,167 source, 9,167 output
+Mismatches:  text 0 / 59,  italic 0 / 59
+
+ para   src_chars   out_chars    text   italic
+------------------------------------------------------------------------------
+    0         299         299      OK       OK
+    1         338         338      OK       OK
+    2          60          60      OK       OK
+    3         367         367      OK       OK
+    4         111         111      OK       OK
+    5         382         382      OK       OK
+    6         191         191      OK       OK
+    7         361         361      OK       OK
+    8          83          83      OK       OK
+    9          81          81      OK       OK
+   10         297         297      OK       OK
+   11          61          61      OK       OK
+   12         221         221      OK       OK
+   13          57          57      OK       OK
+   14         100         100      OK       OK
+   15         315         315      OK       OK
+   16         197         197      OK       OK
+   17          51          51      OK       OK
+   18         121         121      OK       OK
+   19         152         152      OK       OK
+   20          72          72      OK       OK
+   21         186         186      OK       OK
+   22          49          49      OK       OK
+   23          90          90      OK       OK
+   24         154         154      OK       OK
+   25         276         276      OK       OK
+   26           7           7      OK       OK
+   27          42          42      OK       OK
+   28         186         186      OK       OK
+   29          71          71      OK       OK
+   30         137         137      OK       OK
+   31         195         195      OK       OK
+   32          81          81      OK       OK
+   33         346         346      OK       OK
+   34          41          41      OK       OK
+   35         290         290      OK       OK
+   36         250         250      OK       OK
+   37         150         150      OK       OK
+   38         234         234      OK       OK
+   39         103         103      OK       OK
+   40          52          52      OK       OK
+   41         150         150      OK       OK
+   42         322         322      OK       OK
+   43         111         111      OK       OK
+   44          19          19      OK       OK
+   45          52          52      OK       OK
+   46         129         129      OK       OK
+   47          94          94      OK       OK
+   48         346         346      OK       OK
+   49          34          34      OK       OK
+   50          68          68      OK       OK
+   51          37          37      OK       OK
+   52         152         152      OK       OK
+   53         111         111      OK       OK
+   54          98          98      OK       OK
+   55          58          58      OK       OK
+   56         111         111      OK       OK
+   57         364         364      OK       OK
+   58          54          54      OK       OK
