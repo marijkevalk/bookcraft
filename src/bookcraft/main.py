@@ -8,13 +8,13 @@ from pathlib import Path
 import click
 from docx import Document
 
-from book_formatter import __version__
-from book_formatter.ai_chapters import DEFAULT_CLAUDE_BIN, detect_chapters_ai, detect_sneak_preview
-from book_formatter.amazon_reviews import fetch_reviews, format_reviews_report
-from book_formatter.formatter import render
-from book_formatter.metadata import parse_metadata_file
-from book_formatter.template_builder import build_docxtpl_template
-from book_formatter.verify import default_report_path, format_report, verify
+from bookcraft import __version__
+from bookcraft.ai_chapters import DEFAULT_CLAUDE_BIN, detect_chapters_ai, detect_sneak_preview
+from bookcraft.amazon_reviews import fetch_reviews, format_reviews_report
+from bookcraft.formatter import render
+from bookcraft.metadata import parse_metadata_file
+from bookcraft.template_builder import build_docxtpl_template
+from bookcraft.verify import default_report_path, format_report, verify
 
 
 @click.group()

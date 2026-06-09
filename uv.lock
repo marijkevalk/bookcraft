@@ -47,7 +47,7 @@ wheels = [
 ]
 
 [[package]]
-name = "book-formatter"
+name = "bookcraft"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

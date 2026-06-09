@@ -22,7 +22,7 @@ from docx.document import Document as DocxDocument
 from docx.oxml.ns import qn
 from docx.text.paragraph import Paragraph
 
-from book_formatter.ai_chapters import detect_chapters_heuristic
+from bookcraft.ai_chapters import detect_chapters_heuristic
 
 CHAPTER_TITLE_STYLE = "CSP - Chapter Title"
 FRONT_MATTER_BODY_STYLE = "CSP - Front Matter Body Text"

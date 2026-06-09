@@ -7,17 +7,17 @@ import pytest
 from click.testing import CliRunner
 from docx import Document
 
-from book_formatter.ai_chapters import (
+from bookcraft.ai_chapters import (
     Chapter,
     _build_chapters,
     _candidate_lines,
     detect_sneak_preview,
     number_to_words,
 )
-from book_formatter.formatter import render
-from book_formatter.main import cli
-from book_formatter.metadata import BookMetadata, parse_metadata_file
-from book_formatter.template_builder import build_docxtpl_template
+from bookcraft.formatter import render
+from bookcraft.main import cli
+from bookcraft.metadata import BookMetadata, parse_metadata_file
+from bookcraft.template_builder import build_docxtpl_template
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -255,7 +255,7 @@ def test_render_rejects_empty_chapter_list(tmp_path):
 )
 def test_ai_detector_on_author_a():
     """Integration test: shell out to `claude -p`. Skipped if CLI not found."""
-    from book_formatter.ai_chapters import detect_chapters_ai
+    from bookcraft.ai_chapters import detect_chapters_ai
 
     doc = Document(str(FIXTURES / "book_author_A.docx"))
     chapters = detect_chapters_ai(doc)
@@ -269,7 +269,7 @@ def test_ai_detector_on_author_a():
     reason="claude CLI not on PATH",
 )
 def test_ai_detector_on_author_b():
-    from book_formatter.ai_chapters import detect_chapters_ai
+    from bookcraft.ai_chapters import detect_chapters_ai
 
     doc = Document(str(FIXTURES / "book_author_B.docx"))
     chapters = detect_chapters_ai(doc)

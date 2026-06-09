@@ -1,7 +1,7 @@
 [project]
-name = "book-formatter"
+name = "bookcraft"
 version = "0.1.0"
-description = "Format manuscript .docx files into a styled template"
+description = "Format and analyze manuscripts for publishing (book production toolkit)"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -31,10 +31,11 @@ dev = [
 default-groups = ["dev"]
 
 [project.scripts]
-book-formatter = "book_formatter.main:cli"
+book-formatter = "bookcraft.main:cli"
+bookcraft = "bookcraft.main:cli"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/book_formatter"]
+packages = ["src/bookcraft"]
 
 [tool.hatch.build.targets.wheel.sources]
 "src" = ""

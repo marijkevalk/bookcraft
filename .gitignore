@@ -12,3 +12,6 @@ build/
 htmlcov/
 .DS_Store
 Thumbs.db
+
+# scratch / working files
+temp/

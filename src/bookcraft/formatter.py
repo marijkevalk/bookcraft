@@ -14,8 +14,8 @@ from typing import Any
 
 from docxtpl import DocxTemplate, RichText
 
-from book_formatter.ai_chapters import Chapter
-from book_formatter.metadata import BookMetadata
+from bookcraft.ai_chapters import Chapter
+from bookcraft.metadata import BookMetadata
 
 
 def _coerce_body_items(items: list[Any]) -> list[RichText]:
