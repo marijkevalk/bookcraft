@@ -18,6 +18,7 @@ from bookcraft.ai_chapters import (
 from bookcraft.amazon_reviews import fetch_reviews, format_reviews_report
 from bookcraft.analyze import analyze_manuscript, claude_runner, split_chapters
 from bookcraft.formatter import render
+from bookcraft.learning import load_learning, save_learning, update_learning
 from bookcraft.metadata import parse_metadata_file
 from bookcraft.metrics import ChapterMetrics, compute_metrics
 from bookcraft.report import write_pdf
@@ -366,16 +367,22 @@ def analyze(
         reviews_text = format_reviews_report(reviews, asin)
         click.echo(f"Fetched {len(reviews)} reviews")
 
+    learning_text = load_learning()
     click.echo(
         f"Analysing with Claude ({len(chapters)} chapters + synthesis; "
         "this takes a few minutes)..."
     )
-    analysis = analyze_manuscript(chapters, metrics, runner, reviews_text=reviews_text)
+    analysis = analyze_manuscript(
+        chapters, metrics, runner, reviews_text=reviews_text, learning=learning_text
+    )
 
     write_pdf(analysis, output_path, title=report_title)
     syn = analysis.synthesis
     click.echo(f"Verdict: {syn.verdict.upper()} ({syn.score}/100)")
     click.echo(f"Report -> {output_path}")
+
+    click.echo("Updating the learning overview...")
+    save_learning(update_learning(learning_text, analysis, runner, book=report_title))
 
 
 if __name__ == "__main__":

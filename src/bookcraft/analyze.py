@@ -168,7 +168,7 @@ Chapter text:
 
 _SYNTH_PROMPT = """You are the editor-in-chief deciding whether a steamy romance \
 manuscript is ready to publish. Use the per-chapter findings and the hard metrics.
-
+{learning}
 Return ONLY a JSON object:
 {{"verdict": "publish|revise|reject", "score": <integer 0-100>, \
 "summary": "<2-3 sentences>", "opening_assessment": "<does chapter 1 hook a \
@@ -228,9 +228,22 @@ def _findings_digest(chapters: tuple[ChapterAnalysis, ...]) -> str:
 
 
 def synthesize(
-    chapters: tuple[ChapterAnalysis, ...], metrics: Metrics, runner: Runner
+    chapters: tuple[ChapterAnalysis, ...],
+    metrics: Metrics,
+    runner: Runner,
+    learning: str = "",
 ) -> Synthesis:
-    prompt = _SYNTH_PROMPT.format(metrics=metrics, findings=_findings_digest(chapters))
+    learning_block = (
+        "\nKnown patterns from past books (use these to sharpen your judgement):\n"
+        f"{learning}\n"
+        if learning.strip()
+        else ""
+    )
+    prompt = _SYNTH_PROMPT.format(
+        metrics=metrics,
+        findings=_findings_digest(chapters),
+        learning=learning_block,
+    )
     raw = _strip_fences(runner(prompt))
     try:
         payload = json.loads(raw)
@@ -347,6 +360,7 @@ def analyze_manuscript(
     runner: Runner,
     rubric: str | None = None,
     reviews_text: str | None = None,
+    learning: str = "",
 ) -> Analysis:
     """Analyse a manuscript given its (title, text) chapters + metrics.
 
@@ -358,7 +372,7 @@ def analyze_manuscript(
         analyze_chapter(i, title, text, rubric_text, runner)
         for i, (title, text) in enumerate(chapters, start=1)
     )
-    synthesis = synthesize(analysed, metrics, runner)
+    synthesis = synthesize(analysed, metrics, runner, learning=learning)
 
     themes: tuple[ReviewTheme, ...] = ()
     regression: tuple[RegressionCheck, ...] = ()
