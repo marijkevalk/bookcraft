@@ -18,6 +18,12 @@ from bookcraft.ai_chapters import (
 from bookcraft.amazon_reviews import fetch_reviews, format_reviews_report
 from bookcraft.analyze import analyze_manuscript, claude_runner, split_chapters
 from bookcraft.formatter import render
+from bookcraft.history import (
+    build_scorecard,
+    load_history,
+    record_from_analysis,
+    save_record,
+)
 from bookcraft.learning import load_learning, save_learning, update_learning
 from bookcraft.metadata import parse_metadata_file
 from bookcraft.metrics import ChapterMetrics, compute_metrics
@@ -315,6 +321,11 @@ def _extract_asin(book: str) -> str:
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="Pre-fetched reviews .txt (alternative to --book)",
 )
+@click.option(
+    "--ghostwriter",
+    default=None,
+    help="Ghostwriter name (builds their track record; see 'scorecard')",
+)
 def analyze(
     source_path: Path,
     output_path: Path,
@@ -323,6 +334,7 @@ def analyze(
     claude_bin: str,
     book: str | None,
     reviews_file: Path | None,
+    ghostwriter: str | None,
 ) -> None:
     """Analyse a manuscript's quality and write a PDF report.
 
@@ -383,6 +395,29 @@ def analyze(
 
     click.echo("Updating the learning overview...")
     save_learning(update_learning(learning_text, analysis, runner, book=report_title))
+
+    save_record(record_from_analysis(analysis, report_title, ghostwriter or ""))
+    if ghostwriter:
+        click.echo(f"Recorded to {ghostwriter}'s track record (see 'scorecard').")
+
+
+@cli.command()
+def scorecard() -> None:
+    """Show each ghostwriter's track record across past analyses."""
+    cards = build_scorecard(load_history())
+    if not cards:
+        click.echo("No history yet. Run 'analyze --ghostwriter <name>' first.")
+        return
+    for card in cards:
+        click.echo(
+            f"\n{card.ghostwriter} - {card.book_count} book(s), "
+            f"avg {card.avg_score}/100"
+        )
+        if card.weak_dimensions:
+            weak = ", ".join(f"{dim} ({n})" for dim, n in card.weak_dimensions)
+            click.echo(f"  weakest areas: {weak}")
+        for book_title, score in card.books:
+            click.echo(f"  - {book_title}: {score}/100")
 
 
 if __name__ == "__main__":

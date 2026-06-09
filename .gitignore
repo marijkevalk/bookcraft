@@ -15,3 +15,6 @@ Thumbs.db
 
 # scratch / working files
 temp/
+
+# runtime analysis history
+data/
