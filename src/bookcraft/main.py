@@ -9,10 +9,17 @@ import click
 from docx import Document
 
 from bookcraft import __version__
-from bookcraft.ai_chapters import DEFAULT_CLAUDE_BIN, detect_chapters_ai, detect_sneak_preview
+from bookcraft.ai_chapters import (
+    DEFAULT_CLAUDE_BIN,
+    detect_chapters_ai,
+    detect_sneak_preview,
+)
 from bookcraft.amazon_reviews import fetch_reviews, format_reviews_report
+from bookcraft.analyze import analyze_manuscript, claude_runner, split_chapters
 from bookcraft.formatter import render
 from bookcraft.metadata import parse_metadata_file
+from bookcraft.metrics import ChapterMetrics, compute_metrics
+from bookcraft.report import write_pdf
 from bookcraft.template_builder import build_docxtpl_template
 from bookcraft.verify import default_report_path, format_report, verify
 
@@ -115,13 +122,15 @@ def format(
     metadata = parse_metadata_file(metadata_path)
     source_doc = Document(str(source_path))
 
-    click.echo("Detecting chapters with Claude (takes 30–60 s)...")
+    click.echo("Detecting chapters with Claude (takes 30-60 s)...")
     chapters = detect_chapters_ai(source_doc, claude_bin=claude_bin)
 
     if not chapters:
         raise click.ClickException(f"No chapters detected in {source_path}")
 
-    click.echo(f"Found {len(chapters)} chapters: {', '.join(c.title for c in chapters)}")
+    click.echo(
+        f"Found {len(chapters)} chapters: {', '.join(c.title for c in chapters)}"
+    )
 
     sneak_preview = detect_sneak_preview(source_doc)
     if sneak_preview:
@@ -141,12 +150,15 @@ def format(
         pb_tpl = Path(tmp) / "template-paperback.docx"
         build_docxtpl_template(template_path, ebook_tpl, ebook=True)
         build_docxtpl_template(template_path, pb_tpl, ebook=False)
-        render(ebook_tpl, metadata, chapters, output_path, sneak_preview_body=sneak_preview)
-        render(pb_tpl, metadata, chapters, paperback_path, sneak_preview_body=sneak_preview)
+        render(
+            ebook_tpl, metadata, chapters, output_path, sneak_preview_body=sneak_preview
+        )
+        render(
+            pb_tpl, metadata, chapters, paperback_path, sneak_preview_body=sneak_preview
+        )
 
     click.echo(f"Wrote {output_path} ({chapter_summary})")
     click.echo(f"Wrote {paperback_path} ({chapter_summary})")
-
 
 
 @cli.command("verify")
@@ -175,9 +187,7 @@ def format(
         "(defaults to <output>_verification.txt next to the output file)"
     ),
 )
-def verify_cmd(
-    source_path: Path, output_path: Path, report_path: Path | None
-) -> None:
+def verify_cmd(source_path: Path, output_path: Path, report_path: Path | None) -> None:
     """Verify the rendered output matches the source manuscript verbatim.
 
     Compares text and italic-run positions per body paragraph. Writes a
@@ -187,9 +197,7 @@ def verify_cmd(
     result = verify(source_path, output_path)
     report_target = report_path or default_report_path(output_path)
     report_target.write_text(
-        format_report(
-            result, source_path=source_path, output_path=output_path
-        ),
+        format_report(result, source_path=source_path, output_path=output_path),
         encoding="utf-8",
     )
     click.echo(
@@ -252,6 +260,82 @@ def fetch_reviews_cmd(asin: str, output_path: Path | None, pages: int) -> None:
     target.write_text(report, encoding="utf-8")
 
     click.echo(f"Fetched {len(reviews)} reviews → {target}")
+
+
+@cli.command()
+@click.option(
+    "--source",
+    "source_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Manuscript .docx from the ghostwriter",
+)
+@click.option(
+    "--output",
+    "output_path",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Where to write the PDF report",
+)
+@click.option("--title", default=None, help="Report title (defaults to filename)")
+@click.option(
+    "--max-chapters",
+    type=int,
+    default=None,
+    help="Limit to the first N chapters (quick preview / cost control)",
+)
+@click.option(
+    "--claude-bin",
+    default=DEFAULT_CLAUDE_BIN,
+    show_default=True,
+    help="Claude Code CLI binary",
+)
+def analyze(
+    source_path: Path,
+    output_path: Path,
+    title: str | None,
+    max_chapters: int | None,
+    claude_bin: str,
+) -> None:
+    """Analyse a manuscript's quality and write a PDF report.
+
+    Pre-publication mode: a general craft / genre / consistency review with a
+    page-1 verdict, top issues (each backed by a verbatim quote), a chapter
+    heatmap and a ready-to-forward fix list. Review mode (--book) lands next.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    report_title = title or source_path.stem
+
+    click.echo(f"Reading {source_path.name}...")
+    doc = Document(str(source_path))
+    paragraphs = [
+        (para.style.name if para.style and para.style.name else "", para.text)
+        for para in doc.paragraphs
+    ]
+    chapters = split_chapters(paragraphs)
+    if max_chapters:
+        chapters = chapters[:max_chapters]
+    click.echo(f"Detected {len(chapters)} chapter(s).")
+
+    all_text = [text for _, text in paragraphs]
+    chapter_metrics = [
+        ChapterMetrics(title, len(body.split())) for title, body in chapters
+    ]
+    metrics = compute_metrics(all_text, chapters=chapter_metrics)
+
+    def runner(prompt: str) -> str:
+        return claude_runner(prompt, claude_bin=claude_bin)
+
+    click.echo(
+        f"Analysing with Claude ({len(chapters)} chapters + synthesis; "
+        "this takes a few minutes)..."
+    )
+    analysis = analyze_manuscript(chapters, metrics, runner)
+
+    write_pdf(analysis, output_path, title=report_title)
+    syn = analysis.synthesis
+    click.echo(f"Verdict: {syn.verdict.upper()} ({syn.score}/100)")
+    click.echo(f"Report -> {output_path}")
 
 
 if __name__ == "__main__":

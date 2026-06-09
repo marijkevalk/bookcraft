@@ -34,6 +34,9 @@ Runner = Callable[[str], str]
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*\n(.*?)\n```\s*$", re.DOTALL)
 _WS_RE = re.compile(r"\s+")
+_CHAPTER_HEAD_RE = re.compile(
+    r"^\s*(chapter\b|prologue|epilogue|interlude|part\b)", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True)
@@ -100,8 +103,22 @@ def _strip_fences(text: str) -> str:
     return match.group(1) if match else text.strip()
 
 
+# Fold smart quotes/dashes so a verbatim quote still matches when the model and
+# the manuscript differ only in punctuation style (apostrophes, em/en dashes).
+_SMART = str.maketrans(
+    {
+        "\u2019": "'",
+        "\u2018": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u2014": "-",
+        "\u2013": "-",
+    }
+)
+
+
 def _normalize(text: str) -> str:
-    return _WS_RE.sub(" ", text).strip().lower()
+    return _WS_RE.sub(" ", text.translate(_SMART)).strip().lower()
 
 
 def _quote_in_text(quote: str, text: str) -> bool:
@@ -228,3 +245,27 @@ def analyze_manuscript(
     )
     synthesis = synthesize(analysed, metrics, runner)
     return Analysis(synthesis=synthesis, chapters=analysed, metrics=metrics)
+
+
+def split_chapters(paragraphs: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Split ``(style_name, text)`` paragraphs into ``(title, body_text)`` chapters.
+
+    A heading is a non-empty paragraph that either matches a chapter marker
+    (Chapter/Prologue/Epilogue/Part…) or carries a short "Heading" style. Plain,
+    deterministic, unit-tested — no AI and no formatter coupling.
+    """
+    chapters: list[tuple[str, list[str]]] = []
+    for style, text in paragraphs:
+        stripped = text.strip()
+        is_heading = bool(stripped) and (
+            _CHAPTER_HEAD_RE.match(stripped) is not None
+            or (style.lower().startswith("heading") and len(stripped) < 80)
+        )
+        if is_heading:
+            chapters.append((stripped, []))
+            continue
+        if not chapters:
+            chapters.append(("(front matter)", []))
+        if stripped:
+            chapters[-1][1].append(stripped)
+    return [(title, "\n".join(body)) for title, body in chapters if body]

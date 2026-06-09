@@ -110,3 +110,45 @@ def test_analyze_manuscript_orchestrates_chapters_and_synthesis():
     assert len(result.all_findings) == 2  # one per chapter
     # 2 chapter calls + 1 synthesis call
     assert len(runner.calls) == 3
+
+
+def test_split_chapters_by_heading_and_marker():
+    from bookcraft.analyze import split_chapters
+
+    paras = [
+        ("Heading 1", "Chapter 1: Aria"),
+        ("Normal", "She woke cold."),
+        ("Normal", "The room was dark."),
+        ("Normal", "PROLOGUE"),  # matched by marker even without a heading style
+        ("Normal", "Long ago."),
+        ("Heading 1", "Chapter 2"),
+        ("Normal", "He left."),
+    ]
+    chapters = split_chapters(paras)
+    assert [t for t, _ in chapters] == ["Chapter 1: Aria", "PROLOGUE", "Chapter 2"]
+    assert chapters[0][1] == "She woke cold.\nThe room was dark."
+    assert chapters[2][1] == "He left."
+
+
+def test_split_chapters_front_matter_before_first_heading():
+    from bookcraft.analyze import split_chapters
+
+    paras = [
+        ("Normal", "Copyright 2026."),
+        ("Heading 1", "Chapter 1"),
+        ("Normal", "Begin."),
+    ]
+    chapters = split_chapters(paras)
+    assert chapters[0][0] == "(front matter)"
+    assert chapters[0][1] == "Copyright 2026."
+
+
+def test_quote_verification_tolerates_smart_quotes():
+    # Manuscript uses a straight apostrophe; the model returns a smart one.
+    text = "My dragon hasn't stopped moving since the fire."
+    runner = FakeRunner(
+        '{"findings": [{"dimension": "2", "severity": "low", "issue": "x",'
+        ' "quote": "My dragon hasn’t stopped moving", "fix": "y"}]}'
+    )
+    ch = analyze_chapter(1, "C", text, rubric="(r)", runner=runner)
+    assert len(ch.findings) == 1  # matched despite the apostrophe style difference
