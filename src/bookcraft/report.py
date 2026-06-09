@@ -83,6 +83,37 @@ def _writer_block(analysis: Analysis) -> str:
     return f"<ul>{items or '<li>No high/medium fixes flagged.</li>'}</ul>"
 
 
+_RECUR_COLOR = {"yes": "#c0392b", "no": "#27ae60", "unclear": "#e67e22"}
+
+
+def _review_section(analysis: Analysis) -> str:
+    if not analysis.review_themes and not analysis.regression:
+        return ""
+    themes = "".join(
+        f"<li><b>{escape(th.theme)}</b> ({escape(th.frequency)})"
+        + (f" — <i>{escape(th.example)}</i>" if th.example else "")
+        + "</li>"
+        for th in analysis.review_themes
+    )
+    checks = "".join(
+        f"<tr><td>{escape(rc.theme)}</td>"
+        f'<td style="color:{_RECUR_COLOR.get(rc.recurs, "#7f8c8d")};'
+        f'font-weight:bold">{escape(rc.recurs.upper())}</td>'
+        f"<td>{escape(rc.evidence)}</td></tr>"
+        for rc in analysis.regression
+    )
+    out = "<h2>Reader complaints (related book)</h2>"
+    if themes:
+        out += f"<ul>{themes}</ul>"
+    if checks:
+        out += (
+            "<h3>Does this manuscript repeat them?</h3>"
+            "<table class='heatmap'><tr><th>Complaint</th><th>Recurs?</th>"
+            "<th>Evidence</th></tr>" + checks + "</table>"
+        )
+    return out
+
+
 def render_html(analysis: Analysis, title: str = "Manuscript analysis") -> str:
     """Build the full HTML report. Pure — no I/O."""
     s = analysis.synthesis
@@ -122,6 +153,7 @@ h2{{border-bottom:2px solid #eee;padding-bottom:4px;margin-top:32px}}
 <h2>Opening (Look Inside)</h2><p>{escape(s.opening_assessment)}</p>
 <h2>Top issues</h2>{top or "<p>None flagged.</p>"}
 <h2>Chapter heatmap</h2>{_heatmap(analysis)}
+{_review_section(analysis)}
 <h2>Send to your writer</h2>{_writer_block(analysis)}
 <div class="pagebreak"></div><h2>Full detail</h2>{detail}
 </body></html>"""

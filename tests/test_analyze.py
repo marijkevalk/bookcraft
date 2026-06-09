@@ -55,7 +55,9 @@ def test_quote_match_is_case_and_whitespace_insensitive():
 
 
 def test_malformed_json_yields_no_findings():
-    ch = analyze_chapter(1, "C", CHAPTER_TEXT, rubric="(r)", runner=FakeRunner("not json"))
+    ch = analyze_chapter(
+        1, "C", CHAPTER_TEXT, rubric="(r)", runner=FakeRunner("not json")
+    )
     assert ch.findings == ()
 
 
@@ -148,7 +150,84 @@ def test_quote_verification_tolerates_smart_quotes():
     text = "My dragon hasn't stopped moving since the fire."
     runner = FakeRunner(
         '{"findings": [{"dimension": "2", "severity": "low", "issue": "x",'
-        ' "quote": "My dragon hasn’t stopped moving", "fix": "y"}]}'
+        ' "quote": "My dragon hasn’t stopped moving", "fix": "y"}]}'  # noqa: RUF001
     )
     ch = analyze_chapter(1, "C", text, rubric="(r)", runner=runner)
     assert len(ch.findings) == 1  # matched despite the apostrophe style difference
+
+
+REVIEWS_TEXT = (
+    "1 star: The pacing was so slow I gave up halfway. "
+    "2 stars: Way too slow, nothing happens for chapters."
+)
+
+
+class RoutingRunner:
+    """Routes by a marker phrase in each prompt to the right canned JSON."""
+
+    def __init__(self, responses: dict[str, str]) -> None:
+        self.responses = responses
+        self.calls: list[str] = []
+
+    def __call__(self, prompt: str) -> str:
+        self.calls.append(prompt)
+        if "developmental editor" in prompt:
+            return self.responses.get("chapter", "{}")
+        if "editor-in-chief" in prompt:
+            return self.responses.get("synth", "{}")
+        if "NEGATIVE themes" in prompt:
+            return self.responses.get("themes", "{}")
+        if "repeats the problems" in prompt:
+            return self.responses.get("regression", "{}")
+        return "{}"
+
+
+def test_extract_review_themes_verifies_example_quote():
+    from bookcraft.analyze import extract_review_themes
+
+    runner = RoutingRunner(
+        {
+            "themes": '{"themes": ['
+            '{"theme": "slow pacing", "frequency": "2 of 2",'
+            ' "example": "The pacing was so slow"},'
+            '{"theme": "fabricated", "frequency": "x",'
+            ' "example": "this phrase is not in any review"}'
+            "]}"
+        }
+    )
+    themes = extract_review_themes(REVIEWS_TEXT, runner)
+    assert len(themes) == 1  # fabricated review quote dropped
+    assert themes[0].theme == "slow pacing"
+
+
+def test_check_regression_empty_themes_no_call():
+    from bookcraft.analyze import check_regression
+
+    runner = RoutingRunner({})
+    assert check_regression((), "digest", runner) == ()
+    assert runner.calls == []  # no themes -> no Claude call
+
+
+def test_analyze_manuscript_review_mode_attaches_themes_and_regression():
+    runner = RoutingRunner(
+        {
+            "chapter": '{"findings": [{"dimension": "3", "severity": "medium",'
+            ' "issue": "slow", "quote": "cold wind", "fix": "trim"}]}',
+            "synth": '{"verdict": "revise", "score": 55, "summary": "s",'
+            ' "opening_assessment": "o"}',
+            "themes": '{"themes": [{"theme": "slow pacing", "frequency": "2 of 2",'
+            ' "example": "The pacing was so slow"}]}',
+            "regression": '{"checks": [{"theme": "slow pacing", "recurs": "yes",'
+            ' "evidence": "ch.1 drags"}]}',
+        }
+    )
+    result = analyze_manuscript(
+        [("Ch1", CHAPTER_TEXT)],
+        compute_metrics([CHAPTER_TEXT]),
+        runner,
+        rubric="(r)",
+        reviews_text=REVIEWS_TEXT,
+    )
+    assert len(result.review_themes) == 1
+    assert result.regression[0].recurs == "yes"
+    assert result.regression[0].theme == "slow pacing"

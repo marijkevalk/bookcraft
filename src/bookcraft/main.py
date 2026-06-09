@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 import click
@@ -262,6 +263,17 @@ def fetch_reviews_cmd(asin: str, output_path: Path | None, pages: int) -> None:
     click.echo(f"Fetched {len(reviews)} reviews → {target}")
 
 
+def _extract_asin(book: str) -> str:
+    """Pull a 10-char ASIN out of an Amazon URL, or accept a bare ASIN."""
+    book = book.strip()
+    match = re.search(r"(?:/dp/|/gp/product/|/product/)([A-Z0-9]{10})", book)
+    if match:
+        return match.group(1)
+    if re.fullmatch(r"[A-Z0-9]{10}", book):
+        return book
+    raise click.ClickException(f"Could not find an ASIN in {book!r}")
+
+
 @cli.command()
 @click.option(
     "--source",
@@ -290,18 +302,35 @@ def fetch_reviews_cmd(asin: str, output_path: Path | None, pages: int) -> None:
     show_default=True,
     help="Claude Code CLI binary",
 )
+@click.option(
+    "--book",
+    default=None,
+    help="Amazon book link or ASIN (fetches reviews -> review mode)",
+)
+@click.option(
+    "--reviews-file",
+    "reviews_file",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Pre-fetched reviews .txt (alternative to --book)",
+)
 def analyze(
     source_path: Path,
     output_path: Path,
     title: str | None,
     max_chapters: int | None,
     claude_bin: str,
+    book: str | None,
+    reviews_file: Path | None,
 ) -> None:
     """Analyse a manuscript's quality and write a PDF report.
 
     Pre-publication mode: a general craft / genre / consistency review with a
     page-1 verdict, top issues (each backed by a verbatim quote), a chapter
-    heatmap and a ready-to-forward fix list. Review mode (--book) lands next.
+    heatmap and a ready-to-forward fix list.
+
+    Review mode (--book / --reviews-file): also distils reader complaints
+    and flags whether this manuscript repeats them (regression check).
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     report_title = title or source_path.stem
@@ -326,11 +355,22 @@ def analyze(
     def runner(prompt: str) -> str:
         return claude_runner(prompt, claude_bin=claude_bin)
 
+    reviews_text: str | None = None
+    if reviews_file is not None:
+        reviews_text = reviews_file.read_text(encoding="utf-8")
+        click.echo(f"Loaded reviews from {reviews_file.name} (review mode)")
+    elif book:
+        asin = _extract_asin(book)
+        click.echo(f"Fetching reviews for {asin} (review mode)...")
+        reviews = fetch_reviews(asin)
+        reviews_text = format_reviews_report(reviews, asin)
+        click.echo(f"Fetched {len(reviews)} reviews")
+
     click.echo(
         f"Analysing with Claude ({len(chapters)} chapters + synthesis; "
         "this takes a few minutes)..."
     )
-    analysis = analyze_manuscript(chapters, metrics, runner)
+    analysis = analyze_manuscript(chapters, metrics, runner, reviews_text=reviews_text)
 
     write_pdf(analysis, output_path, title=report_title)
     syn = analysis.synthesis

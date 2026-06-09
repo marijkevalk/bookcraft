@@ -65,10 +65,30 @@ class Synthesis:
 
 
 @dataclass(frozen=True)
+class ReviewTheme:
+    """A recurring complaint distilled from reader reviews."""
+
+    theme: str
+    frequency: str  # e.g. "4 of 12 reviews"
+    example: str  # verbatim review quote
+
+
+@dataclass(frozen=True)
+class RegressionCheck:
+    """Whether the manuscript repeats a known reader complaint."""
+
+    theme: str
+    recurs: str  # yes | no | unclear
+    evidence: str
+
+
+@dataclass(frozen=True)
 class Analysis:
     synthesis: Synthesis
     chapters: tuple[ChapterAnalysis, ...]
     metrics: Metrics
+    review_themes: tuple[ReviewTheme, ...] = ()
+    regression: tuple[RegressionCheck, ...] = ()
 
     @property
     def all_findings(self) -> list[Finding]:
@@ -231,20 +251,129 @@ def synthesize(
     )
 
 
+_THEMES_PROMPT = """You analyse reader reviews of a steamy romance book. From the \
+reviews below, extract the recurring NEGATIVE themes (what readers complain about).
+
+Return ONLY JSON:
+{{"themes": [{{"theme": "<short>", "frequency": "<e.g. 4 of 12 reviews>", \
+"example": "<short VERBATIM quote from a review>"}}]}}
+
+Only real, recurring complaints — ignore one-offs and praise. Quote reviews verbatim.
+
+Reviews:
+{reviews}
+"""
+
+_REGRESSION_PROMPT = """You check whether a NEW manuscript repeats the problems \
+readers complained about in a related book. For each complaint, decide whether this \
+manuscript shows the same issue, using its findings and metrics.
+
+Return ONLY JSON:
+{{"checks": [{{"theme": "<the complaint>", "recurs": "yes|no|unclear", \
+"evidence": "<where/why in the manuscript, one sentence>"}}]}}
+
+Reader complaints:
+{themes}
+
+This manuscript's findings and metrics:
+{digest}
+"""
+
+
+def extract_review_themes(reviews_text: str, runner: Runner) -> tuple[ReviewTheme, ...]:
+    """Distil recurring complaints from reader reviews; verify example quotes."""
+    raw = _strip_fences(runner(_THEMES_PROMPT.format(reviews=reviews_text)))
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("review themes not valid JSON: %s", raw[:200])
+        return ()
+    items = payload.get("themes", []) if isinstance(payload, dict) else []
+    out: list[ReviewTheme] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        example = str(item.get("example", ""))
+        if example and not _quote_in_text(example, reviews_text):
+            logger.info(
+                "dropping review theme with unverifiable quote: %r", example[:80]
+            )
+            continue
+        out.append(
+            ReviewTheme(
+                theme=str(item.get("theme", "")),
+                frequency=str(item.get("frequency", "")),
+                example=example,
+            )
+        )
+    return tuple(out)
+
+
+def _themes_text(themes: tuple[ReviewTheme, ...]) -> str:
+    return "\n".join(f"- {th.theme} ({th.frequency})" for th in themes)
+
+
+def check_regression(
+    themes: tuple[ReviewTheme, ...], digest: str, runner: Runner
+) -> tuple[RegressionCheck, ...]:
+    """Decide, per complaint, whether the manuscript repeats it."""
+    if not themes:
+        return ()
+    prompt = _REGRESSION_PROMPT.format(themes=_themes_text(themes), digest=digest)
+    raw = _strip_fences(runner(prompt))
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("regression not valid JSON: %s", raw[:200])
+        return ()
+    items = payload.get("checks", []) if isinstance(payload, dict) else []
+    out: list[RegressionCheck] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        out.append(
+            RegressionCheck(
+                theme=str(item.get("theme", "")),
+                recurs=str(item.get("recurs", "unclear")).lower(),
+                evidence=str(item.get("evidence", "")),
+            )
+        )
+    return tuple(out)
+
+
 def analyze_manuscript(
     chapters: list[tuple[str, str]],
     metrics: Metrics,
     runner: Runner,
     rubric: str | None = None,
+    reviews_text: str | None = None,
 ) -> Analysis:
-    """Analyse a manuscript given its (title, text) chapters + computed metrics."""
+    """Analyse a manuscript given its (title, text) chapters + metrics.
+
+    If ``reviews_text`` is given (review mode), also distil reader complaints and
+    check whether this manuscript repeats them (the regression analysis).
+    """
     rubric_text = rubric if rubric is not None else load_rubric()
     analysed = tuple(
         analyze_chapter(i, title, text, rubric_text, runner)
         for i, (title, text) in enumerate(chapters, start=1)
     )
     synthesis = synthesize(analysed, metrics, runner)
-    return Analysis(synthesis=synthesis, chapters=analysed, metrics=metrics)
+
+    themes: tuple[ReviewTheme, ...] = ()
+    regression: tuple[RegressionCheck, ...] = ()
+    if reviews_text:
+        themes = extract_review_themes(reviews_text, runner)
+        digest = f"{synthesis.summary}\n{_findings_digest(analysed)}"
+        regression = check_regression(themes, digest, runner)
+
+    return Analysis(
+        synthesis=synthesis,
+        chapters=analysed,
+        metrics=metrics,
+        review_themes=themes,
+        regression=regression,
+    )
 
 
 def split_chapters(paragraphs: list[tuple[str, str]]) -> list[tuple[str, str]]:

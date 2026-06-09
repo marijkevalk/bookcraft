@@ -57,3 +57,25 @@ def test_writer_block_lists_high_and_medium_only():
 def test_metrics_rendered():
     html = render_html(_analysis())
     assert "Words" in html and "Reading ease" in html
+
+
+def test_review_section_rendered_when_present():
+    from bookcraft.analyze import RegressionCheck, ReviewTheme
+
+    base = _analysis()
+    a = Analysis(
+        synthesis=base.synthesis,
+        chapters=base.chapters,
+        metrics=base.metrics,
+        review_themes=(ReviewTheme("slow pacing", "2 of 2", "too slow"),),
+        regression=(RegressionCheck("slow pacing", "yes", "ch.1 drags"),),
+    )
+    html = render_html(a)
+    assert "Reader complaints" in html
+    assert "slow pacing" in html
+    assert "YES" in html
+    assert "ch.1 drags" in html
+
+
+def test_no_review_section_without_reviews():
+    assert "Reader complaints" not in render_html(_analysis())
