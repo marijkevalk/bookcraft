@@ -23,6 +23,7 @@ Chapter.pov.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import subprocess
@@ -32,6 +33,8 @@ from typing import Any
 from docx.document import Document
 from docx.text.paragraph import Paragraph as DocxParagraph
 from docxtpl import RichText
+
+logger = logging.getLogger(__name__)
 
 MAX_CANDIDATE_CHARS = 80
 DEFAULT_CLAUDE_BIN = "claude"
@@ -124,6 +127,8 @@ def _candidate_lines(doc: Document) -> list[tuple[int, str, str]]:
         is_heading_style = style.lower().startswith("heading")
         if is_heading_style or len(text) <= MAX_CANDIDATE_CHARS:
             out.append((i, style, text))
+    logger.info("Candidate paragraphs found: %d", len(out))
+    logger.debug("Candidates:\n%s", _format_candidates(out))
     return out
 
 
@@ -147,11 +152,16 @@ def _call_claude_cli(
     binary = shutil.which(claude_bin) or claude_bin
     prompt = _PROMPT_TEMPLATE.format(candidates=_format_candidates(candidates))
 
-    cmd = [binary, "-p", prompt, "--output-format", "text"]
+    logger.info("Sending %d candidates to Claude (timeout %ds)", len(candidates), timeout)
+    logger.debug("Full prompt sent to Claude:\n%s", prompt)
+
+    # Pass prompt via stdin to avoid MAX_ARG_STRLEN (128 KB) OS limit.
+    cmd = [binary, "-p", "/dev/stdin", "--output-format", "text"]
 
     try:
         result = subprocess.run(
             cmd,
+            input=prompt,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -163,15 +173,22 @@ def _call_claude_cli(
             f"a custom binary via --claude-bin."
         ) from e
     except subprocess.CalledProcessError as e:
+        logger.error(
+            "claude CLI failed (exit %d)\nstdout: %s\nstderr: %s",
+            e.returncode, e.stdout, e.stderr,
+        )
         raise RuntimeError(
             f"claude CLI failed (exit {e.returncode}):\n"
             f"stdout: {e.stdout!r}\nstderr: {e.stderr!r}"
         ) from e
 
+    logger.debug("Raw Claude response:\n%s", result.stdout)
+
     raw = _strip_fences(result.stdout)
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as e:
+        logger.error("Failed to parse Claude response as JSON:\n%s", result.stdout[:2000])
         raise RuntimeError(
             f"claude returned non-JSON output:\n{result.stdout[:1000]}"
         ) from e
@@ -179,6 +196,9 @@ def _call_claude_cli(
     chapters = payload.get("chapters", [])
     if not isinstance(chapters, list):
         raise RuntimeError(f"Response had non-list chapters: {chapters!r}")
+
+    logger.info("Claude returned %d chapters", len(chapters))
+    logger.debug("Claude chapters raw: %s", json.dumps(chapters, indent=2))
     return chapters
 
 
@@ -228,9 +248,13 @@ def _build_chapters(
     # Drop any entry whose title paragraph is the sneak preview heading or
     # inside the sneak preview section (e.g. "CHAPTER ONE" of the next book).
     if sneak_idx is not None:
+        before_filter = len(claude_chapters)
         claude_chapters = [
             ch for ch in claude_chapters if int(ch["title_idx"]) < sneak_idx
         ]
+        dropped = before_filter - len(claude_chapters)
+        if dropped:
+            logger.info("Dropped %d chapter(s) inside sneak preview section", dropped)
 
     result: list[Chapter] = []
     for i, ch in enumerate(claude_chapters):
@@ -256,8 +280,10 @@ def _build_chapters(
 
         number = i + 1
         title = f"CHAPTER {number_to_words(number)}"
+        logger.debug("Built chapter %d: %r (pov=%r, body_paragraphs=%d)", number, title, pov, len(body))
         result.append(Chapter(number=number, title=title, pov=pov, body=body))
 
+    logger.info("Total chapters built: %d", len(result))
     return result
 
 
@@ -270,6 +296,7 @@ def detect_chapters_ai(
     """Detect chapters by calling the Claude Code CLI as a subprocess."""
     candidates = _candidate_lines(doc)
     if not candidates:
+        logger.warning("No candidate paragraphs found in document")
         return []
     claude_chapters = _call_claude_cli(
         candidates, claude_bin=claude_bin, timeout=timeout

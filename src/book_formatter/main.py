@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import click
@@ -9,6 +10,7 @@ from docx import Document
 
 from book_formatter import __version__
 from book_formatter.ai_chapters import DEFAULT_CLAUDE_BIN, detect_chapters_ai, detect_sneak_preview
+from book_formatter.amazon_reviews import fetch_reviews, format_reviews_report
 from book_formatter.formatter import render
 from book_formatter.metadata import parse_metadata_file
 from book_formatter.template_builder import build_docxtpl_template
@@ -100,6 +102,14 @@ def format(
     needed; bills against your Claude Code subscription.
     """
     import tempfile
+
+    log_path = output_path.with_suffix(".log")
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+        handlers=[logging.FileHandler(log_path, encoding="utf-8")],
+    )
+    click.echo(f"Logging to {log_path}")
 
     click.echo(f"Reading {source_path.name}...")
     metadata = parse_metadata_file(metadata_path)
@@ -207,6 +217,41 @@ def verify_cmd(
             f"vs {result.output_chapter_count} output) — Claude may have missed a "
             "heading. Check the output manually."
         )
+
+
+@cli.command("fetch-reviews")
+@click.argument("asin")
+@click.option(
+    "--output",
+    "output_path",
+    required=False,
+    default=None,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Where to write the reviews .txt (default: <asin>_reviews.txt in current dir)",
+)
+@click.option(
+    "--pages",
+    default=5,
+    show_default=True,
+    help="Number of review pages to fetch (10 reviews per page)",
+)
+def fetch_reviews_cmd(asin: str, output_path: Path | None, pages: int) -> None:
+    """Fetch Amazon customer reviews for a book by ASIN.
+
+    ASIN is the Amazon product ID, e.g. B0GX2ZW64X.
+    Writes a plain-text report with all reviews grouped by star rating.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+    click.echo(f"Fetching reviews for ASIN {asin} (up to {pages} pages)...")
+    reviews = fetch_reviews(asin, max_pages=pages)
+
+    report = format_reviews_report(reviews, asin)
+
+    target = output_path or Path(f"{asin}_reviews.txt")
+    target.write_text(report, encoding="utf-8")
+
+    click.echo(f"Fetched {len(reviews)} reviews → {target}")
 
 
 if __name__ == "__main__":
