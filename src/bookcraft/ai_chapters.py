@@ -1,14 +1,26 @@
-"""AI-driven chapter detection using the Claude Code CLI.
+"""AI-driven chapter detection with a pluggable model backend.
 
-We shell out to `claude -p` and ask for a JSON object as plain text —
-this reuses the user's existing Claude Code authentication (no
-ANTHROPIC_API_KEY needed) and bills against their Claude Code
-subscription rather than the API.
+The chapter-detection call (candidate paragraphs -> chapters JSON) is
+served by one of several interchangeable backends, all producing the
+same `[{title_idx, pov_idx, pov}]` contract:
 
-We deliberately do NOT use `--json-schema`: in agent mode (which `-p`
-implies), schema-validated output is unreliable and frequently returns
-an empty result. Asking for JSON in the prompt and parsing the text
-output is the workaround.
+- ``claude``    — shell out to the local `claude -p` CLI. Reuses the
+                  user's Claude Code auth (no API key) and bills against
+                  their Claude Code subscription. This is the default so
+                  existing VPS runs via `format-book.sh` are unchanged.
+- ``gemini``    — POST the prompt to Google's Gemini API using the
+                  caller's own `GEMINI_API_KEY`. Lets users run the tool
+                  on their own machine, independent of anyone's Claude
+                  subscription (Google's free tier is enough for this
+                  small structural task).
+- ``heuristic`` — zero-AI keyword detector (`detect_chapters_heuristic`).
+                  No network, no account.
+
+We deliberately do NOT use Claude's `--json-schema`: in agent mode
+(which `-p` implies), schema-validated output is unreliable and
+frequently returns an empty result. Asking for JSON in the prompt and
+parsing the text output is the workaround. The Gemini backend, by
+contrast, requests `application/json` output natively.
 
 Only the SHORT paragraphs from the manuscript (likely headers) are sent
 to Claude. Body prose is never seen by Claude — chapter bodies are
@@ -24,9 +36,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -39,6 +54,17 @@ logger = logging.getLogger(__name__)
 MAX_CANDIDATE_CHARS = 80
 DEFAULT_CLAUDE_BIN = "claude"
 DEFAULT_TIMEOUT_SEC = 180
+
+# Model backends selectable via detect_chapters_ai(backend=...).
+BACKENDS = ("claude", "gemini", "heuristic")
+DEFAULT_BACKEND = "claude"  # keeps existing VPS/format-book.sh runs unchanged
+
+# Gemini (Google AI) backend — bring-your-own free API key.
+DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
+_GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+)
 
 _ONES = ["", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"]
 _TEENS = [
@@ -142,6 +168,31 @@ def _strip_fences(text: str) -> str:
     return m.group(1).strip() if m else text
 
 
+def _parse_chapters_json(output: str, *, source: str) -> list[dict[str, Any]]:
+    """Parse a backend's text output into the chapters list.
+
+    Shared by every AI backend: strips any markdown fences, loads the JSON
+    object and unwraps its ``chapters`` list. ``source`` names the backend
+    for error messages/logging.
+    """
+    raw = _strip_fences(output)
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse %s response as JSON:\n%s", source, output[:2000])
+        raise RuntimeError(
+            f"{source} returned non-JSON output:\n{output[:1000]}"
+        ) from e
+
+    chapters = payload.get("chapters", [])
+    if not isinstance(chapters, list):
+        raise RuntimeError(f"Response had non-list chapters: {chapters!r}")
+
+    logger.info("%s returned %d chapters", source, len(chapters))
+    logger.debug("%s chapters raw: %s", source, json.dumps(chapters, indent=2))
+    return chapters
+
+
 def _call_claude_cli(
     candidates: list[tuple[int, str, str]],
     *,
@@ -183,23 +234,70 @@ def _call_claude_cli(
         ) from e
 
     logger.debug("Raw Claude response:\n%s", result.stdout)
+    return _parse_chapters_json(result.stdout, source="claude")
 
-    raw = _strip_fences(result.stdout)
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as e:
-        logger.error("Failed to parse Claude response as JSON:\n%s", result.stdout[:2000])
+
+def _call_gemini(
+    candidates: list[tuple[int, str, str]],
+    *,
+    model: str = DEFAULT_GEMINI_MODEL,
+    api_key: str | None = None,
+    timeout: int = DEFAULT_TIMEOUT_SEC,
+) -> list[dict[str, Any]]:
+    """Call Google's Gemini API with a JSON-output prompt; parse the result.
+
+    Uses the caller's own API key (arg or ``GEMINI_API_KEY`` env), so the
+    tool runs independently of any Claude Code subscription. Only the short
+    candidate paragraphs are sent — never the manuscript body.
+    """
+    key = api_key or os.environ.get(GEMINI_API_KEY_ENV)
+    if not key:
         raise RuntimeError(
-            f"claude returned non-JSON output:\n{result.stdout[:1000]}"
+            "No Gemini API key found. Set the GEMINI_API_KEY environment "
+            "variable (free key from https://aistudio.google.com/apikey) "
+            "or pass one to the tool."
+        )
+
+    prompt = _PROMPT_TEMPLATE.format(candidates=_format_candidates(candidates))
+    logger.info(
+        "Sending %d candidates to Gemini model %s (timeout %ds)",
+        len(candidates), model, timeout,
+    )
+    logger.debug("Full prompt sent to Gemini:\n%s", prompt)
+
+    body = json.dumps(
+        {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"response_mime_type": "application/json"},
+        }
+    ).encode("utf-8")
+    url = f"{_GEMINI_URL.format(model=model)}?key={key}"
+    req = urllib.request.Request(
+        url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "replace")[:1000]
+        raise RuntimeError(
+            f"Gemini API request failed (HTTP {e.code}): {detail}"
+        ) from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Could not reach the Gemini API: {e.reason}") from e
+
+    try:
+        text = payload["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError, TypeError) as e:
+        # A blocked prompt or empty candidate list lands here.
+        raise RuntimeError(
+            f"Gemini returned no usable text. Raw response:\n"
+            f"{json.dumps(payload)[:1000]}"
         ) from e
 
-    chapters = payload.get("chapters", [])
-    if not isinstance(chapters, list):
-        raise RuntimeError(f"Response had non-list chapters: {chapters!r}")
-
-    logger.info("Claude returned %d chapters", len(chapters))
-    logger.debug("Claude chapters raw: %s", json.dumps(chapters, indent=2))
-    return chapters
+    logger.debug("Raw Gemini response text:\n%s", text)
+    return _parse_chapters_json(text, source="gemini")
 
 
 def _body_paragraph_to_rich(p: DocxParagraph) -> RichText:
@@ -290,18 +388,45 @@ def _build_chapters(
 def detect_chapters_ai(
     doc: Document,
     *,
+    backend: str = DEFAULT_BACKEND,
+    model: str | None = None,
+    api_key: str | None = None,
     claude_bin: str = DEFAULT_CLAUDE_BIN,
     timeout: int = DEFAULT_TIMEOUT_SEC,
 ) -> list[Chapter]:
-    """Detect chapters by calling the Claude Code CLI as a subprocess."""
+    """Detect chapters via the selected model backend.
+
+    ``backend`` is one of :data:`BACKENDS`:
+    - ``"claude"``    — local Claude Code CLI (default; VPS-compatible).
+    - ``"gemini"``    — Google Gemini API with the caller's own key.
+    - ``"heuristic"`` — zero-AI keyword detector (no network, no account).
+    """
+    if backend not in BACKENDS:
+        raise ValueError(
+            f"Unknown backend {backend!r}; choose one of {', '.join(BACKENDS)}."
+        )
+
+    # The heuristic builds chapters directly from the document.
+    if backend == "heuristic":
+        return detect_chapters_heuristic(doc)
+
     candidates = _candidate_lines(doc)
     if not candidates:
         logger.warning("No candidate paragraphs found in document")
         return []
-    claude_chapters = _call_claude_cli(
-        candidates, claude_bin=claude_bin, timeout=timeout
-    )
-    return _build_chapters(doc, claude_chapters)
+
+    if backend == "gemini":
+        chapters = _call_gemini(
+            candidates,
+            model=model or DEFAULT_GEMINI_MODEL,
+            api_key=api_key,
+            timeout=timeout,
+        )
+    else:  # "claude"
+        chapters = _call_claude_cli(
+            candidates, claude_bin=claude_bin, timeout=timeout
+        )
+    return _build_chapters(doc, chapters)
 
 
 _CHAPTER_TITLE_RE = re.compile(

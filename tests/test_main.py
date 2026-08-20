@@ -275,3 +275,95 @@ def test_ai_detector_on_author_b():
     chapters = detect_chapters_ai(doc)
     assert len(chapters) == 4
     assert chapters[0].pov == "Fiona"
+
+
+# --- Backend seam (claude / gemini / heuristic) -------------------------------
+
+
+class _FakeGeminiResponse:
+    """Minimal context-manager stand-in for urllib's urlopen response."""
+
+    def __init__(self, chapters_json: str):
+        # Mirror the real Gemini envelope: text lives under candidates/parts.
+        self._payload = {
+            "candidates": [{"content": {"parts": [{"text": chapters_json}]}}]
+        }
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self) -> bytes:
+        import json
+
+        return json.dumps(self._payload).encode("utf-8")
+
+
+def test_detect_chapters_gemini_backend(monkeypatch):
+    """The gemini backend parses the API envelope and builds chapters."""
+    from bookcraft import ai_chapters
+
+    # Chapter structure the model would return for author A's manuscript.
+    chapters_json = (
+        '{"chapters": ['
+        '{"title_idx": 0, "pov_idx": -1, "pov": "Aria"},'
+        '{"title_idx": 3, "pov_idx": -1, "pov": "Ryder"}'
+        "]}"
+    )
+    captured: dict = {}
+
+    def fake_urlopen(req, timeout=None):
+        captured["url"] = req.full_url
+        captured["body"] = req.data
+        return _FakeGeminiResponse(chapters_json)
+
+    monkeypatch.setattr(ai_chapters.urllib.request, "urlopen", fake_urlopen)
+
+    doc = Document(str(FIXTURES / "book_author_A.docx"))
+    chapters = ai_chapters.detect_chapters_ai(
+        doc, backend="gemini", api_key="test-key"
+    )
+
+    assert [c.pov for c in chapters] == ["Aria", "Ryder"]
+    assert chapters[0].title == "CHAPTER ONE"
+    # Key travels in the query string; JSON output is requested natively.
+    assert "key=test-key" in captured["url"]
+    assert b"application/json" in captured["body"]
+
+
+def test_gemini_backend_requires_key(monkeypatch):
+    from bookcraft import ai_chapters
+
+    monkeypatch.delenv(ai_chapters.GEMINI_API_KEY_ENV, raising=False)
+    doc = Document(str(FIXTURES / "book_author_A.docx"))
+    with pytest.raises(RuntimeError, match="No Gemini API key"):
+        ai_chapters.detect_chapters_ai(doc, backend="gemini")
+
+
+def test_heuristic_backend_needs_no_network():
+    """backend='heuristic' detects chapters with no API call at all."""
+    from bookcraft.ai_chapters import detect_chapters_ai
+
+    doc = Document(str(FIXTURES / "book_author_A.docx"))
+    chapters = detect_chapters_ai(doc, backend="heuristic")
+    assert len(chapters) >= 1
+    assert chapters[0].title == "CHAPTER ONE"
+
+
+def test_unknown_backend_rejected():
+    from bookcraft.ai_chapters import detect_chapters_ai
+
+    doc = Document(str(FIXTURES / "book_author_A.docx"))
+    with pytest.raises(ValueError, match="Unknown backend"):
+        detect_chapters_ai(doc, backend="gpt5")
+
+
+def test_format_backend_option_exposed():
+    """The format command advertises the backend choices."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["format", "--help"])
+    assert result.exit_code == 0
+    for name in ("claude", "gemini", "heuristic"):
+        assert name in result.output

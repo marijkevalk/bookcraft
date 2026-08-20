@@ -11,7 +11,10 @@ from docx import Document
 
 from bookcraft import __version__
 from bookcraft.ai_chapters import (
+    BACKENDS,
+    DEFAULT_BACKEND,
     DEFAULT_CLAUDE_BIN,
+    DEFAULT_GEMINI_MODEL,
     detect_chapters_ai,
     detect_sneak_preview,
 )
@@ -95,16 +98,31 @@ def build_template_cmd(source_path: Path, output_path: Path, paperback: bool) ->
     help="Where to write the ebook .docx (paperback gets _paperback suffix)",
 )
 @click.option(
+    "--backend",
+    type=click.Choice(BACKENDS),
+    default=DEFAULT_BACKEND,
+    show_default=True,
+    help="Chapter-detection backend: claude (local CLI), gemini (own API "
+    "key, GEMINI_API_KEY), or heuristic (no AI/account).",
+)
+@click.option(
+    "--model",
+    default=None,
+    help=f"Model name for the gemini backend (default: {DEFAULT_GEMINI_MODEL}).",
+)
+@click.option(
     "--claude-bin",
     default=DEFAULT_CLAUDE_BIN,
     show_default=True,
-    help="Claude Code CLI binary to invoke for chapter detection",
+    help="Claude Code CLI binary to invoke for the claude backend",
 )
 def format(
     template_path: Path,
     source_path: Path,
     metadata_path: Path,
     output_path: Path,
+    backend: str,
+    model: str | None,
     claude_bin: str,
 ) -> None:
     """Merge manuscript + metadata into the template using AI chapter detection.
@@ -113,8 +131,9 @@ def format(
     - <output>.docx           — ebook (no page numbers)
     - <output>_paperback.docx — paperback (TOC + footer page numbers)
 
-    Uses the local Claude Code CLI for structure detection — no API key
-    needed; bills against your Claude Code subscription.
+    Chapter structure is detected by the chosen ``--backend``: the local
+    Claude Code CLI (default), Google's Gemini API with your own key, or a
+    zero-AI heuristic.
     """
     import tempfile
 
@@ -130,8 +149,10 @@ def format(
     metadata = parse_metadata_file(metadata_path)
     source_doc = Document(str(source_path))
 
-    click.echo("Detecting chapters with Claude (takes 30-60 s)...")
-    chapters = detect_chapters_ai(source_doc, claude_bin=claude_bin)
+    click.echo(f"Detecting chapters ({backend} backend)...")
+    chapters = detect_chapters_ai(
+        source_doc, backend=backend, model=model, claude_bin=claude_bin
+    )
 
     if not chapters:
         raise click.ClickException(f"No chapters detected in {source_path}")
