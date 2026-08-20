@@ -6,3 +6,5 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 
 [lint.per-file-ignores]
 "tests/**" = ["E501"]
+# webui.py embeds an HTML/CSS template string; long lines there are expected.
+"src/bookcraft/webui.py" = ["E501"]

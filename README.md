@@ -1,12 +1,38 @@
 # book-formatter
 
 Format a manuscript `.docx` into a styled book layout by merging it into a
-template `.docx`. Uses your local **Claude Code CLI** for chapter
-detection (no extra API key needed — bills against your Claude Code
-subscription) and **docxtpl** for rendering. Your template stays the
-source of truth for layout.
+template `.docx`. Chapter detection runs through a **pluggable backend** and
+**docxtpl** does the rendering. Your template stays the source of truth for
+layout.
 
-## Setup (one-time)
+## Run it on your own computer (recommended for authors)
+
+A friendly local web UI, using your **own free Google Gemini key** — no Claude
+subscription:
+
+```bash
+uv run book-formatter serve        # opens http://127.0.0.1:8765 in your browser
+```
+
+Paste your Gemini key (from <https://aistudio.google.com/apikey>), upload a
+manuscript, fill in the book details, download the ebook + paperback. See
+[docs/INSTALL.md](docs/INSTALL.md) for a full Mac/Windows install and a
+double-click bundle.
+
+## Chapter-detection backends
+
+Selectable via `--backend` (CLI) — the UI defaults to `gemini`:
+
+| Backend | Needs | Notes |
+|---------|-------|-------|
+| `gemini` | your own free `GEMINI_API_KEY` | default for the UI; runs off your own account |
+| `claude` | local Claude Code CLI | original path; used on Marijke's server (default for the CLI) |
+| `heuristic` | nothing | zero-AI keyword detector; offline, no account |
+
+Only short header-like paragraphs are ever sent to the model; body prose is
+extracted verbatim from the source and never seen or rewritten.
+
+## Setup (one-time, CLI / development)
 
 1. **Install deps**:
    ```bash

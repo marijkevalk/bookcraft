@@ -15,12 +15,9 @@ from bookcraft.ai_chapters import (
     DEFAULT_BACKEND,
     DEFAULT_CLAUDE_BIN,
     DEFAULT_GEMINI_MODEL,
-    detect_chapters_ai,
-    detect_sneak_preview,
 )
 from bookcraft.amazon_reviews import fetch_reviews, format_reviews_report
 from bookcraft.analyze import analyze_manuscript, claude_runner, split_chapters
-from bookcraft.formatter import render
 from bookcraft.history import (
     build_scorecard,
     load_history,
@@ -30,6 +27,7 @@ from bookcraft.history import (
 from bookcraft.learning import load_learning, save_learning, update_learning
 from bookcraft.metadata import parse_metadata_file
 from bookcraft.metrics import ChapterMetrics, compute_metrics
+from bookcraft.pipeline import format_book
 from bookcraft.report import write_pdf
 from bookcraft.template_builder import build_docxtpl_template
 from bookcraft.verify import default_report_path, format_report, verify
@@ -135,8 +133,6 @@ def format(
     Claude Code CLI (default), Google's Gemini API with your own key, or a
     zero-AI heuristic.
     """
-    import tempfile
-
     log_path = output_path.with_suffix(".log")
     logging.basicConfig(
         level=logging.DEBUG,
@@ -147,47 +143,28 @@ def format(
 
     click.echo(f"Reading {source_path.name}...")
     metadata = parse_metadata_file(metadata_path)
-    source_doc = Document(str(source_path))
 
     click.echo(f"Detecting chapters ({backend} backend)...")
-    chapters = detect_chapters_ai(
-        source_doc, backend=backend, model=model, claude_bin=claude_bin
-    )
-
-    if not chapters:
-        raise click.ClickException(f"No chapters detected in {source_path}")
-
-    click.echo(
-        f"Found {len(chapters)} chapters: {', '.join(c.title for c in chapters)}"
-    )
-
-    sneak_preview = detect_sneak_preview(source_doc)
-    if sneak_preview:
-        click.echo(f"Found sneak preview ({len(sneak_preview)} paragraphs).")
-
-    paperback_path = output_path.with_name(
-        output_path.stem + "_paperback" + output_path.suffix
-    )
-
-    chapter_summary = (
-        f"{len(chapters)} chapters: {', '.join(c.title for c in chapters)}"
-    )
-
-    click.echo("Rendering ebook and paperback...")
-    with tempfile.TemporaryDirectory() as tmp:
-        ebook_tpl = Path(tmp) / "template-ebook.docx"
-        pb_tpl = Path(tmp) / "template-paperback.docx"
-        build_docxtpl_template(template_path, ebook_tpl, ebook=True)
-        build_docxtpl_template(template_path, pb_tpl, ebook=False)
-        render(
-            ebook_tpl, metadata, chapters, output_path, sneak_preview_body=sneak_preview
+    try:
+        result = format_book(
+            source_path=source_path,
+            metadata=metadata,
+            output_path=output_path,
+            template_path=template_path,
+            backend=backend,
+            model=model,
+            claude_bin=claude_bin,
         )
-        render(
-            pb_tpl, metadata, chapters, paperback_path, sneak_preview_body=sneak_preview
-        )
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
 
-    click.echo(f"Wrote {output_path} ({chapter_summary})")
-    click.echo(f"Wrote {paperback_path} ({chapter_summary})")
+    click.echo(f"Found {result.summary}")
+    if result.sneak_preview_paragraphs:
+        click.echo(
+            f"Found sneak preview ({result.sneak_preview_paragraphs} paragraphs)."
+        )
+    click.echo(f"Wrote {result.ebook_path} ({result.summary})")
+    click.echo(f"Wrote {result.paperback_path} ({result.summary})")
 
 
 @cli.command("verify")
@@ -439,6 +416,33 @@ def scorecard() -> None:
             click.echo(f"  weakest areas: {weak}")
         for book_title, score in card.books:
             click.echo(f"  - {book_title}: {score}/100")
+
+
+@cli.command()
+@click.option("--host", default="127.0.0.1", show_default=True,
+              help="Interface to bind. Keep 127.0.0.1 so it stays on this computer.")
+@click.option("--port", default=8765, show_default=True, help="Port to serve on.")
+@click.option("--no-browser", is_flag=True, default=False,
+              help="Do not open a browser automatically.")
+def serve(host: str, port: int, no_browser: bool) -> None:
+    """Start the local web UI and open it in your browser.
+
+    A friendly front-end for formatting a manuscript with your own free
+    Gemini key — no command line, no Claude subscription. Runs only on this
+    computer (localhost). Press Ctrl+C to stop.
+    """
+    from bookcraft.webui import create_app
+
+    url = f"http://{host}:{port}/"
+    click.echo(f"Bookcraft is running at {url}")
+    click.echo("Press Ctrl+C to stop.")
+    if not no_browser:
+        import threading
+        import webbrowser
+
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+
+    create_app().run(host=host, port=port)
 
 
 if __name__ == "__main__":

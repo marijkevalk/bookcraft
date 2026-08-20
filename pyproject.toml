@@ -17,6 +17,7 @@ dependencies = [
     "python-docx>=1.1",
     "docxtpl>=0.16",
     "playwright>=1.60.0",
+    "flask>=3.0",
 ]
 
 [dependency-groups]
@@ -36,6 +37,10 @@ bookcraft = "bookcraft.main:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bookcraft"]
+artifacts = ["src/bookcraft/assets/*.docx"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/bookcraft/assets/template.docx" = "bookcraft/assets/template.docx"
 
 [tool.hatch.build.targets.wheel.sources]
 "src" = ""
