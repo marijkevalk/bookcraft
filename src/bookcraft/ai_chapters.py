@@ -330,10 +330,30 @@ def _body_paragraph_to_rich(p: DocxParagraph) -> RichText:
     return rt
 
 
-def _sneak_preview_idx(paragraphs: list) -> int | None:
+# A real sneak-preview heading is a short line like "SNEAK PREVIEW" / "SNEAK
+# PEAK". Bound the length so ordinary prose that merely opens with the phrase
+# can't masquerade as the section heading.
+_SNEAK_HEADING_MAX_CHARS = 60
+
+
+def _is_sneak_preview_heading(text: str) -> bool:
+    """True only for a genuine 'SNEAK PREVIEW' / 'SNEAK PEAK' section heading.
+
+    Requires the two-word heading phrase on a short, heading-length line, so
+    prose that merely starts with the word 'sneak' (e.g. "Sneaking out of the
+    room, she held her breath.") is not mistaken for the sneak-preview boundary.
+    """
+    stripped = text.strip()
+    upper = stripped.upper()
+    if not (upper.startswith("SNEAK PREVIEW") or upper.startswith("SNEAK PEAK")):
+        return False
+    return len(stripped) <= _SNEAK_HEADING_MAX_CHARS
+
+
+def _sneak_preview_idx(paragraphs: list[Any]) -> int | None:
     """Return the paragraph index of the first SNEAK PREVIEW heading, or None."""
     for i, p in enumerate(paragraphs):
-        if p.text.strip().upper().startswith("SNEAK"):
+        if _is_sneak_preview_heading(p.text):
             return i
     return None
 

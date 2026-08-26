@@ -11,6 +11,7 @@ from bookcraft.ai_chapters import (
     Chapter,
     _build_chapters,
     _candidate_lines,
+    _sneak_preview_idx,
     detect_sneak_preview,
     number_to_words,
 )
@@ -105,6 +106,47 @@ def test_build_chapters_preserves_italic_runs():
 def test_detect_sneak_preview_no_section():
     doc = Document(str(FIXTURES / "book_author_A.docx"))
     assert detect_sneak_preview(doc) == []
+
+
+def test_sneak_preview_ignores_prose_starting_with_sneak():
+    """Body prose that merely starts with 'sneak' must not truncate the book.
+
+    Regression: "Sneaking out of the room, ..." was mistaken for the SNEAK
+    PREVIEW section heading, which dropped every chapter after it.
+    """
+    doc = Document()
+    doc.add_paragraph("CHAPTER ONE")
+    doc.add_paragraph("Aria")
+    doc.add_paragraph("She woke early that morning.")
+    doc.add_paragraph("Sneaking out of the room, she held her breath.")
+    doc.add_paragraph("The hallway was dark.")
+    doc.add_paragraph("CHAPTER TWO")
+    doc.add_paragraph("Ryder")
+    doc.add_paragraph("He watched her go.")
+
+    assert _sneak_preview_idx(list(doc.paragraphs)) is None
+    assert detect_sneak_preview(doc) == []
+
+    chapters = _build_chapters(
+        doc,
+        [
+            {"title_idx": 0, "pov_idx": 1, "pov": "Aria"},
+            {"title_idx": 5, "pov_idx": 6, "pov": "Ryder"},
+        ],
+    )
+    assert [c.title for c in chapters] == ["CHAPTER ONE", "CHAPTER TWO"]
+
+
+def test_sneak_preview_detects_real_heading():
+    """A genuine 'SNEAK PREVIEW' heading is still found."""
+    doc = Document()
+    doc.add_paragraph("CHAPTER ONE")
+    doc.add_paragraph("Body text here.")
+    doc.add_paragraph("SNEAK PREVIEW")
+    doc.add_paragraph("Teaser of the next book.")
+
+    assert _sneak_preview_idx(list(doc.paragraphs)) == 2
+    assert len(detect_sneak_preview(doc)) == 1
 
 
 def test_build_template_creates_docxtpl_markers(tmp_path):

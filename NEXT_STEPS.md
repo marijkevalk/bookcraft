@@ -42,6 +42,12 @@ Tracked in the Opus vault as FR-120.
   no key, handles the content — same path the server `format-book` uses) or
   **Offline** (no AI/account; nails clean "Chapter N" headings — 4/4 on both
   fixtures). All three verified end-to-end through the UI; ruff+mypy+37 tests green.
+- **Sneak-preview false-positive fixed (2026-08-27).** `_sneak_preview_idx`
+  matched any paragraph starting with "SNEAK", so prose like "Sneaking out of
+  the room, ..." was treated as the sneak-preview boundary and every chapter
+  after it was dropped (Kristiaan's book truncated mid-way). Now requires a real
+  "SNEAK PREVIEW" / "SNEAK PEAK" heading on a short line. Regression tests added;
+  61 tests green, mypy clean.
 - Note: on the VPS, the app's `urllib` call hangs because IPv6 is broken there
   (DNS returns an AAAA first; `urllib` has no happy-eyeballs, `curl` does). This
   is VPS-only — a normal Mac is unaffected. To run the app on the VPS, force
