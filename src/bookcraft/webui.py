@@ -108,25 +108,31 @@ _PAGE = """<!doctype html>
 
   <form method="post" action="/format" enctype="multipart/form-data">
     <div class="card">
-      <h2>1 · Your Gemini key</h2>
-      <ol class="steps">
-        <li>Get a <strong>free</strong> key at
-          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
-          (a Google account, no credit card).</li>
-        <li>Paste it below — it is stored only on this computer and reused next time.</li>
-      </ol>
-      <label class="req" for="api_key">Gemini API key</label>
+      <h2>1 · Chapter detection</h2>
+      <label for="backend">Method</label>
+      <select id="backend" name="backend">
+        <option value="claude"{{ ' selected' if sel_backend == 'claude' }}>Claude Code — uses your Claude login (handles explicit / adult content)</option>
+        <option value="gemini"{{ ' selected' if sel_backend == 'gemini' }}>Gemini — free Google key</option>
+        <option value="heuristic"{{ ' selected' if sel_backend == 'heuristic' }}>Offline — no AI, no account (needs clear chapter headings)</option>
+      </select>
+      <div class="hint">Gemini needs a free key below and may refuse explicit content.
+        Claude uses your local Claude Code login (no key). Offline uses no account and
+        works well when chapters start with clear "Chapter N" headings.</div>
+
+      <label for="api_key">Gemini API key <small>(only for the Gemini method)</small></label>
       <input type="password" id="api_key" name="api_key"
              placeholder="{{ 'saved — leave blank to reuse' if has_key else 'AIza…' }}"
              autocomplete="off">
-      <div class="hint">Leave blank to reuse your saved key.</div>
+      <div class="hint">Free key at
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
+        (Google account, no credit card). Stored only on this computer; leave blank to reuse your saved key.</div>
     </div>
 
     <div class="card">
       <h2>2 · Your manuscript</h2>
       <label class="req" for="manuscript">Manuscript (.docx)</label>
       <input type="file" id="manuscript" name="manuscript" accept=".docx" required>
-      <div class="hint">Your chapter text is read locally; only short heading lines are sent to Gemini to find chapter boundaries.</div>
+      <div class="hint">Your chapter text is read locally; with the AI methods only short heading lines are sent out to find chapter boundaries. The Offline method sends nothing.</div>
     </div>
 
     <div class="card">
@@ -197,12 +203,17 @@ def create_app() -> Flask:
             _PAGE,
             has_key=bool(get_saved_api_key()),
             default_model=DEFAULT_GEMINI_MODEL,
+            sel_backend="gemini",
             error=None,
             result=None,
         )
 
     @app.post("/format")
     def do_format() -> str:
+        backend = (request.form.get("backend") or "gemini").strip()
+        if backend not in ("claude", "gemini", "heuristic"):
+            backend = "gemini"
+
         def page(
             *,
             error: str | None = None,
@@ -212,6 +223,7 @@ def create_app() -> Flask:
                 _PAGE,
                 has_key=bool(get_saved_api_key()),
                 default_model=DEFAULT_GEMINI_MODEL,
+                sel_backend=backend,
                 error=error,
                 result=result,
             )
@@ -223,8 +235,9 @@ def create_app() -> Flask:
             return page(error="The manuscript must be a .docx file.")
 
         api_key = (request.form.get("api_key") or "").strip() or get_saved_api_key()
-        if not api_key:
-            return page(error="Please paste your Gemini API key (step 1).")
+        if backend == "gemini" and not api_key:
+            return page(error="Please paste your Gemini API key (step 1), "
+                              "or pick Claude / Offline as the method.")
 
         required = {
             "title": "Title", "subtitle": "Subtitle", "series": "Series",
@@ -258,7 +271,7 @@ def create_app() -> Flask:
                 source_path=source,
                 metadata=metadata,
                 output_path=output,
-                backend="gemini",
+                backend=backend,
                 model=model,
                 api_key=api_key,
             )

@@ -33,6 +33,15 @@ Tracked in the Opus vault as FR-120.
   in `ai_chapters.py`. The old model was retired (404). Avoid "thinking" models
   (gemini-3.x-flash): they stall on the JSON-output prompt (13-min hang). The
   lite model returns in ~1s. Verified end-to-end via the default (no `--model`).
+- **UI backend selector added (2026-08-27).** The web UI now offers Claude /
+  Gemini / Offline as the chapter-detection method (was hardcoded to Gemini).
+  Reason: **Gemini refuses explicit/adult content** — a real romance manuscript
+  returns `promptFeedback.blockReason: PROHIBITED_CONTENT`, which the normal
+  `safetySettings` cannot override (it's Google's non-configurable filter). For
+  Kristiaan's steamy-romance books, use **Claude** (his own Claude Code login,
+  no key, handles the content — same path the server `format-book` uses) or
+  **Offline** (no AI/account; nails clean "Chapter N" headings — 4/4 on both
+  fixtures). All three verified end-to-end through the UI; ruff+mypy+37 tests green.
 - Note: on the VPS, the app's `urllib` call hangs because IPv6 is broken there
   (DNS returns an AAAA first; `urllib` has no happy-eyeballs, `curl` does). This
   is VPS-only — a normal Mac is unaffected. To run the app on the VPS, force
