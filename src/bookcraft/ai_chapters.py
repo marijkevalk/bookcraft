@@ -60,7 +60,10 @@ BACKENDS = ("claude", "gemini", "heuristic")
 DEFAULT_BACKEND = "claude"  # keeps existing VPS/format-book.sh runs unchanged
 
 # Gemini (Google AI) backend — bring-your-own free API key.
-DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
+# Use a current free-tier, non-"thinking" model: fast (~1s) and deterministic
+# for structured extraction. `gemini-2.0-flash` was retired (404); thinking
+# models (e.g. gemini-3.x-flash) stall on the JSON-output prompt.
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
 _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"

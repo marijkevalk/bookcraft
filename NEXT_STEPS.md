@@ -5,27 +5,11 @@ Tracked in the Opus vault as FR-120.
 
 ## Still to do
 
-1. **Accuracy benchmark (the one real blocker).**
-   - Get a free Gemini key: <https://aistudio.google.com/apikey>
-   - Run Gemini vs Claude on the test manuscripts and record the delta:
-     ```bash
-     export GEMINI_API_KEY=...   # your free key
-     uv run book-formatter format --template tests/fixtures/template.docx \
-       --source tests/fixtures/book_author_A.docx \
-       --metadata tests/fixtures/book_metadata.txt \
-       --output /tmp/out.docx --backend gemini
-     ```
-     Compare chapter count + POV names against the `--backend claude` result
-     (author A should be 4 chapters: Aria, Ryder, Aria, Ryder).
-   - If good enough → sign off Fase 1.
+1. **Merge to `master`** — benchmark signed off (see below), so the branch can
+   land. Once merged, the install command drops the `@feature/...` suffix:
+   `uvx --from git+https://github.com/marijkevalk/bookcraft.git book-formatter serve`.
 
-2. **Merge to `master`** once the benchmark signs off (kept on the branch
-   until then so the live VPS default stays `claude`).
-
-3. **Confirm the default Gemini model** (`gemini-2.0-flash`) is still a current
-   free-tier model; bump `DEFAULT_GEMINI_MODEL` in `ai_chapters.py` if not.
-
-4. **Optional — double-click bundle for Kristiaan** (only if the uvx/pip route
+2. **Optional — double-click bundle for Kristiaan** (only if the uvx/pip route
    in `docs/INSTALL.md` is too fiddly). Config is ready; must be built on the
    target OS:
    ```bash
@@ -42,3 +26,14 @@ Tracked in the Opus vault as FR-120.
 - Local Flask web UI + `book-formatter serve` + shared pipeline + packaging
   config + install docs (`44ef0b2`).
 - 59 tests green, ruff + mypy clean.
+- **Accuracy benchmark signed off (2026-08-26).** Gemini matches Claude on both
+  fixtures: author A → 4 chapters (Aria, Ryder, Aria, Ryder); author B → 4
+  chapters (Fiona, Dimitri, Fiona, Fiona). Non-ai suite: 37 passed.
+- **Default Gemini model bumped** `gemini-2.0-flash` → `gemini-3.5-flash-lite`
+  in `ai_chapters.py`. The old model was retired (404). Avoid "thinking" models
+  (gemini-3.x-flash): they stall on the JSON-output prompt (13-min hang). The
+  lite model returns in ~1s. Verified end-to-end via the default (no `--model`).
+- Note: on the VPS, the app's `urllib` call hangs because IPv6 is broken there
+  (DNS returns an AAAA first; `urllib` has no happy-eyeballs, `curl` does). This
+  is VPS-only — a normal Mac is unaffected. To run the app on the VPS, force
+  IPv4 (patch `socket.getaddrinfo` to `AF_INET`).
